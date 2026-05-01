@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Códex — Codificador de Símbolos</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<style>
+  :root {
+    --bg:     #0a0906;
+    --bg2:    #14110c;
+    --bg3:    #1c1812;
+    --border: #352e22;
+    --gold:   #c8994a;
+    --gold2:  #e8c870;
+    --gdim:   #6a5228;
+    --text:   #e0d4bc;
+    --tdim:   #7a6e58;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Crimson Text', Georgia, serif;
+    min-height: 100vh;
+  }
+
+  /* subtle paper grain */
+  body::after {
+    content: '';
+    position: fixed; inset: 0; pointer-events: none; z-index: 9000;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    opacity: .5;
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 52px 28px 80px; }
+
+  /* ── HEADER ── */
+  .header { text-align: center; margin-bottom: 48px; }
+  .header-eye { width: 36px; height: 36px; margin: 0 auto 14px; color: var(--gold); }
+  .header h1 {
+    font-family: 'Cinzel', serif;
+    font-size: clamp(22px, 4vw, 44px);
+    font-weight: 700;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: var(--gold2);
+    line-height: 1.1;
+  }
+  .header sub {
+    display: block; margin-top: 8px; font-size: 1rem; font-style: italic;
+    color: var(--tdim); letter-spacing: .05em;
+  }
+  .rule {
+    display: flex; align-items: center; gap: 14px; margin: 18px auto 0; width: fit-content;
+  }
+  .rule span { width: 80px; height: 1px; background: linear-gradient(to right, transparent, var(--gdim)); }
+  .rule span:last-child { background: linear-gradient(to left, transparent, var(--gdim)); }
+  .rule-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--gold); opacity: .5; }
+
+  /* ── PANELS ── */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 22px 22px 18px;
+    position: relative;
+  }
+  .panel-lbl {
+    font-family: 'Cinzel', serif; font-size: .6rem; letter-spacing: .25em;
+    text-transform: uppercase; color: var(--gdim);
+    display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+  }
+  .panel-lbl::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  textarea {
+    width: 100%; min-height: 150px; resize: vertical;
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text); font-family: 'Crimson Text', serif; font-size: 1.15rem;
+    line-height: 1.7; padding: 14px 16px; outline: none;
+    transition: border-color .2s;
+  }
+  textarea:focus { border-color: var(--gold); }
+  textarea::placeholder { color: var(--tdim); font-style: italic; }
+
+  /* output */
+  .output {
+    min-height: 150px; background: var(--bg3); border: 1px solid var(--border);
+    padding: 12px 14px;
+    display: flex; flex-wrap: wrap; align-content: flex-start; gap: 0;
+  }
+  .out-word {
+    display: inline-flex; align-items: center;
+    margin-right: 10px; margin-bottom: 6px; gap: 2px;
+  }
+  .out-ch {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    width: 30px;
+  }
+  .out-ch svg { width: 26px; height: 26px; color: var(--gold); flex-shrink: 0; }
+  .out-ltr {
+    font-family: 'Cinzel', serif; font-size: .48rem; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--tdim); opacity: .7;
+  }
+  .out-empty { color: var(--tdim); font-style: italic; font-size: .95rem; align-self: center; width: 100%; text-align: center; padding: 20px; }
+  .out-plain { color: var(--tdim); font-size: 1.1rem; line-height: 26px; margin-bottom: 6px; }
+
+  /* ── BUTTONS ── */
+  .actions { display: flex; gap: 10px; margin-top: 14px; }
+  .btn {
+    font-family: 'Cinzel', serif; font-size: .58rem; letter-spacing: .2em;
+    text-transform: uppercase; padding: 9px 20px; border: 1px solid var(--border);
+    background: transparent; color: var(--tdim); cursor: pointer; transition: all .18s;
+  }
+  .btn:hover { border-color: var(--gold); color: var(--gold); background: rgba(200,153,74,.07); }
+  .btn.accent {
+    border-color: var(--gold); color: var(--gold2);
+    background: linear-gradient(135deg,rgba(200,153,74,.18),rgba(200,153,74,.06));
+  }
+  .btn.accent:hover { background: linear-gradient(135deg,rgba(200,153,74,.3),rgba(200,153,74,.12)); }
+  .btn:disabled { opacity: .35; cursor: not-allowed; }
+
+  /* ── ALPHABET ── */
+  .sep { display: flex; align-items: center; gap: 16px; margin: 8px 0 20px; }
+  .sep span { flex: 1; height: 1px; background: var(--border); }
+  .sep em { font-family: 'Cinzel', serif; font-size: .6rem; letter-spacing: .3em; color: var(--gdim); font-style: normal; white-space: nowrap; }
+
+  .abc {
+    background: var(--bg2); border: 1px solid var(--border);
+    padding: 22px;
+  }
+  .abc-grid {
+    display: grid;
+    grid-template-columns: repeat(13, 1fr);
+    border-top: 1px solid var(--border);
+    border-left: 1px solid var(--border);
+  }
+  @media (max-width: 680px) { .abc-grid { grid-template-columns: repeat(9, 1fr); } }
+
+  .abc-cell {
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 4px 8px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    background: var(--bg3);
+    transition: background .15s;
+    cursor: default;
+  }
+  .abc-cell:hover { background: rgba(200,153,74,.07); }
+  .abc-cell.lit { background: rgba(200,153,74,.13); border-color: var(--gdim); }
+  .abc-cell svg { width: 28px; height: 28px; color: var(--gold); }
+  .abc-letter { font-family: 'Cinzel', serif; font-size: .55rem; letter-spacing: .1em; color: var(--tdim); text-transform: uppercase; }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(14px);
+    background: var(--bg2); border: 1px solid var(--gold);
+    color: var(--gold2); font-family: 'Cinzel', serif; font-size: .62rem;
+    letter-spacing: .2em; text-transform: uppercase;
+    padding: 12px 28px; z-index: 9999;
+    opacity: 0; transition: all .35s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="root"></div>
+</div>
+
+
+<script type="text/babel">
+const { useState, useRef } = React;
+
+/* ═══════════════════════════════════════════════════════════════
+   26 UNIQUE ABSTRACT CIPHER SYMBOLS
+   None are derived from Latin letterforms.
+   Each is built from geometry: circles, arcs, dots, triangles,
+   spirals, crosses, hooks, nested shapes, radial marks.
+═══════════════════════════════════════════════════════════════ */
+const SYM = {
+
+  // A — two concentric arcs + center dot
+  a: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <path d="M8,24 A10,10 0 0,1 24,24"/>
+      <path d="M11,20 A6,6 0 0,1 21,20"/>
+      <circle cx="16" cy="26" r="1.5" fill="currentColor" stroke="none"/>
+    </svg>
+  ),
+
+  // B — square with inner diamond
+  b: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="7" y="7" width="18" height="18" rx="0"/>
+      <polygon points="16,11 21,16 16,21 11,16"/>
+    </svg>
+  ),
+
+  // C — spiral (2-turn)
+  c: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <path d="M16,16 m0,-7 a7,7 0 1,0 7,7 a4.5,4.5 0 1,0 -4.5,-4.5 a2,2 0 1,0 2,2"/>
+    </svg>
+  ),
+
+  // D — triangle pointing down with a circle inside
+  d: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="16,26 5,8 27,8"/>
+      <circle cx="16" cy="15" r="3.5"/>
+    </svg>
+  ),
+
+  // E — four-pointed star
+  e: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="16,5 18.5,13.5 27,16 18.5,18.5 16,27 13.5,18.5 5,16 13.5,13.5"/>
+    </svg>
+  ),
+
+  // F — circle with three radiating spikes (top, bottom-left, bottom-right)
+  f: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <circle cx="16" cy="16" r="6"/>
+      <line x1="16" y1="10" x2="16" y2="4"/>
+      <line x1="10.8" y1="19" x2="6.5" y2="25.4"/>
+      <line x1="21.2" y1="19" x2="25.5" y2="25.4"/>
+    </svg>
+  ),
+
+  // G — crescent + dot above
+  g: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <path d="M22,8 A9,9 0 1,0 22,24 A6,6 0 1,1 22,8"/>
+      <circle cx="16" cy="5" r="1.8" fill="currentColor" stroke="none"/>
+    </svg>
+  ),
+
+  // H — two circles connected by horizontal bar
+  h: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <circle cx="9" cy="16" r="5"/>
+      <circle cx="23" cy="16" r="5"/>
+      <line x1="14" y1="16" x2="18" y2="16"/>
+    </svg>
+  ),
+
+  // I — hexagon
+  i: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="16,5 25,10.5 25,21.5 16,27 7,21.5 7,10.5"/>
+    </svg>
+  ),
+
+  // J — inverted teardrop with tail
+  j: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <path d="M16,8 C22,8 26,13 24,18 C22,23 16,24 16,24 C16,24 10,23 8,18 C6,13 10,8 16,8 Z"/>
+      <line x1="16" y1="24" x2="16" y2="29"/>
+      <line x1="12" y1="27" x2="20" y2="27"/>
+    </svg>
+  ),
+
+  // K — eye shape (vesica) with slit pupil
+  k: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <path d="M5,16 Q10,8 16,8 Q22,8 27,16 Q22,24 16,24 Q10,24 5,16 Z"/>
+      <ellipse cx="16" cy="16" rx="2.5" ry="5" fill="currentColor" fillOpacity="0.3"/>
+      <ellipse cx="16" cy="16" rx="2.5" ry="5"/>
+    </svg>
+  ),
+
+  // L — nested triangles (pointing opposite)
+  l: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="16,5 28,26 4,26"/>
+      <polygon points="16,22 7.5,10 24.5,10"/>
+    </svg>
+  ),
+
+  // M — cross with dots on each arm tip
+  m: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <line x1="16" y1="5" x2="16" y2="27"/>
+      <line x1="5" y1="16" x2="27" y2="16"/>
+      <circle cx="16" cy="5" r="2" fill="currentColor" stroke="none"/>
+      <circle cx="16" cy="27" r="2" fill="currentColor" stroke="none"/>
+      <circle cx="5" cy="16" r="2" fill="currentColor" stroke="none"/>
+      <circle cx="27" cy="16" r="2" fill="currentColor" stroke="none"/>
+    </svg>
+  ),
+
+  // N — wave + circle
+  n: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <path d="M5,19 Q8,10 12,19 Q16,28 20,19 Q24,10 27,19"/>
+      <circle cx="16" cy="9" r="3.5"/>
+    </svg>
+  ),
+
+  // O — octagram (two overlapping squares rotated 45°)
+  o: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="8" y="8" width="16" height="16"/>
+      <rect x="8" y="8" width="16" height="16" transform="rotate(45 16 16)"/>
+    </svg>
+  ),
+
+  // P — three concentric circles
+  p: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <circle cx="16" cy="16" r="11"/>
+      <circle cx="16" cy="16" r="6.5"/>
+      <circle cx="16" cy="16" r="2.5"/>
+    </svg>
+  ),
+
+  // Q — lightning bolt
+  q: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20,4 11,17 17,17 12,28"/>
+    </svg>
+  ),
+
+  // R — arrow spiral: square spiral path
+  r: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16,16 L16,6 L26,6 L26,26 L6,26 L6,10 L22,10"/>
+      <polyline points="18,8 22,10 18,12"/>
+    </svg>
+  ),
+
+  // S — double helix (two interleaved S-curves)
+  s: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <path d="M10,6 Q22,6 22,13 Q22,20 10,20 Q10,26 16,27"/>
+      <path d="M22,12 Q10,12 10,19 Q10,26 22,26 Q22,20 16,19"/>
+    </svg>
+  ),
+
+  // T — pentagon with center dot
+  t: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="16,5 27,13 23,26 9,26 5,13"/>
+      <circle cx="16" cy="17" r="2.5" fill="currentColor" stroke="none"/>
+    </svg>
+  ),
+
+  // U — diamond with horizontal cut through middle
+  u: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="16,4 28,16 16,28 4,16"/>
+      <line x1="6" y1="16" x2="26" y2="16"/>
+    </svg>
+  ),
+
+  // V — three stacked horizontal bars + two side dots
+  v: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <line x1="9" y1="10" x2="23" y2="10"/>
+      <line x1="9" y1="16" x2="23" y2="16"/>
+      <line x1="9" y1="22" x2="23" y2="22"/>
+      <circle cx="6" cy="13" r="1.8" fill="currentColor" stroke="none"/>
+      <circle cx="6" cy="19" r="1.8" fill="currentColor" stroke="none"/>
+    </svg>
+  ),
+
+  // W — radial: 6 lines from center
+  w: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <line x1="16" y1="16" x2="16" y2="4"/>
+      <line x1="16" y1="16" x2="26.4" y2="22"/>
+      <line x1="16" y1="16" x2="26.4" y2="10"/>
+      <line x1="16" y1="16" x2="16" y2="28"/>
+      <line x1="16" y1="16" x2="5.6" y2="22"/>
+      <line x1="16" y1="16" x2="5.6" y2="10"/>
+    </svg>
+  ),
+
+  // X — two arcs crossing (yin-yang style) + dots
+  x: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <path d="M8,8 Q24,8 24,16 Q24,24 8,24"/>
+      <path d="M24,8 Q8,8 8,16 Q8,24 24,24"/>
+      <circle cx="10" cy="16" r="2" fill="currentColor" stroke="none"/>
+      <circle cx="22" cy="16" r="2" fill="currentColor" stroke="none"/>
+    </svg>
+  ),
+
+  // Y — hour-glass (two triangles vertex-to-vertex)
+  y: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="6,5 26,5 16,16"/>
+      <polygon points="6,27 26,27 16,16"/>
+    </svg>
+  ),
+
+  // Z — circle divided by two diagonals, one quadrant filled
+  z: () => (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <circle cx="16" cy="16" r="11"/>
+      <line x1="7.2" y1="7.2" x2="24.8" y2="24.8"/>
+      <line x1="24.8" y1="7.2" x2="7.2" y2="24.8"/>
+      <path d="M16,5 Q27,5 24.8,7.2 L16,16 Z" fill="currentColor" fillOpacity="0.6" stroke="none"/>
+    </svg>
+  ),
+};
+
+const ALPHA = 'abcdefghijklmnopqrstuvwxyz'.split('');
+
+// Normalize accented / special characters to plain ASCII
+function normalize(ch) {
+  return ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ñ/g, 'n').replace(/Ñ/g, 'N');
+}
+
+// Tokenize text into words / spaces
+function tokenize(text) {
+  const result = [];
+  const parts = text.split(/( +|\n)/);
+  for (const part of parts) {
+    if (!part) continue;
+    if (part === '\n') { result.push({ type: 'newline' }); continue; }
+    if (/^ +$/.test(part)) { result.push({ type: 'space', n: part.length }); continue; }
+    const chars = [];
+    for (const ch of part) {
+      const lo = normalize(ch).toLowerCase();
+      chars.push({ ch, lo, hasSymbol: !!SYM[lo] });
+    }
+    result.push({ type: 'word', chars });
+  }
+  return result;
+}
+
+function getUsed(text) {
+  return new Set(text.split('').map(c => normalize(c).toLowerCase()).filter(c => SYM[c]));
+}
+
+/* ── App ─────────────────────────────────────────────────────────── */
+function App() {
+  const [text, setText] = useState('');
+  const [labels, setLabels] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [toast, setToast] = useState(false);
+
+  const tokens = tokenize(text);
+  const used = getUsed(text);
+  const hasContent = text.trim().length > 0;
+
+  function showToast() {
+    setToast(true);
+    setTimeout(() => setToast(false), 2600);
+  }
+
+  async function doExport() {
+    if (!hasContent) return;
+    setExporting(true);
+    try {
+      await exportToCanvas(tokens);
+      showToast();
+    } catch(e) {
+      console.error(e);
+    }
+    setExporting(false);
+  }
+
+  return (
+    <div>
+      {/* HEADER */}
+      <div className="header">
+        <svg className="header-eye" viewBox="0 0 36 36" fill="none" stroke="currentColor" strokeWidth="1.4">
+          <path d="M3,18 Q10,8 18,8 Q26,8 33,18 Q26,28 18,28 Q10,28 3,18 Z"/>
+          <circle cx="18" cy="18" r="5"/>
+          <circle cx="18" cy="18" r="2" fill="currentColor" stroke="none"/>
+        </svg>
+        <h1>Codificador de Símbolos</h1>
+        <sub>Transforma palabras en un lenguaje cifrado</sub>
+        <div className="rule">
+          <span></span><div className="rule-dot"></div><span></span>
+        </div>
+      </div>
+
+      {/* INPUT + OUTPUT */}
+      <div className="grid">
+        {/* LEFT: Input */}
+        <div className="panel">
+          <div className="panel-lbl">Texto original</div>
+          <textarea
+            value={text}
+            onChange={e => setText(e.target.value)}
+            placeholder="Escribe aquí tu mensaje secreto…"
+            spellCheck="false"
+          />
+          <div className="actions">
+            <button className="btn" onClick={() => setText('')}>Limpiar</button>
+            <button className="btn" style={{marginLeft:'auto'}} onClick={() => setLabels(v => !v)}>
+              {labels ? 'Ocultar letras' : 'Mostrar letras'}
+            </button>
+          </div>
+        </div>
+
+        {/* RIGHT: Encoded output */}
+        <div className="panel">
+          <div className="panel-lbl">Mensaje cifrado</div>
+          <div className="output">
+            {!hasContent && <div className="out-empty">El código aparecerá aquí…</div>}
+            {tokens.map((tok, ti) => {
+              if (tok.type === 'newline') return <div key={ti} style={{width:'100%',height:4}}/>;
+              if (tok.type === 'space') return (
+                <span key={ti} style={{display:'inline-flex', alignItems:'center', gap: 4}}>
+                  {Array.from({length: tok.n}).map((_, si) => (
+                    <span key={si} style={{color:'var(--tdim)', fontSize:'1.3rem', lineHeight:'28px', letterSpacing:0, fontFamily:'monospace'}}>_</span>
+                  ))}
+                </span>
+              );
+              return (
+                <span key={ti} className="out-word">
+                  {tok.chars.map((c, ci) =>
+                    c.hasSymbol ? (
+                      <span key={ci} className="out-ch">
+                        {SYM[c.lo]()}
+                        {labels && <span className="out-ltr">{c.lo}</span>}
+                      </span>
+                    ) : (
+                      <span key={ci} className="out-plain">{c.ch}</span>
+                    )
+                  )}
+                </span>
+              );
+            })}
+          </div>
+          <div className="actions">
+            <button
+              className="btn accent"
+              onClick={doExport}
+              disabled={!hasContent || exporting}
+            >
+              {exporting ? 'Generando…' : '↓ Exportar JPG'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ALPHABET */}
+      <div className="sep">
+        <span/><em>∴ Alfabeto Cifrado ∴</em><span/>
+      </div>
+      <div className="abc">
+        <div className="abc-grid">
+          {ALPHA.map(letter => (
+            <div key={letter} className={`abc-cell${used.has(letter) ? ' lit' : ''}`}>
+              {SYM[letter]()}
+              <div className="abc-letter">{letter}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* TOAST */}
+      <div className={`toast${toast ? ' show' : ''}`}>Imagen guardada</div>
+    </div>
+  );
+}
+
+/* ── CANVAS EXPORT ───────────────────────────────────────────────── */
+
+// Convert an SVG string to an HTMLImageElement
+function svgToImg(svgStr, size) {
+  return new Promise((resolve) => {
+    const blob = new Blob([svgStr], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.src = url;
+  });
+}
+
+// Get SVG markup string for a letter
+function getSVGMarkup(letter, color = '#c8994a') {
+  const paths = {
+    a: `<path d="M8,24 A10,10 0 0,1 24,24"/><path d="M11,20 A6,6 0 0,1 21,20"/><circle cx="16" cy="26" r="1.5" fill="${color}" stroke="none"/>`,
+    b: `<rect x="7" y="7" width="18" height="18"/><polygon points="16,11 21,16 16,21 11,16"/>`,
+    c: `<path d="M16,16 m0,-7 a7,7 0 1,0 7,7 a4.5,4.5 0 1,0 -4.5,-4.5 a2,2 0 1,0 2,2"/>`,
+    d: `<polygon points="16,26 5,8 27,8"/><circle cx="16" cy="15" r="3.5"/>`,
+    e: `<polygon points="16,5 18.5,13.5 27,16 18.5,18.5 16,27 13.5,18.5 5,16 13.5,13.5"/>`,
+    f: `<circle cx="16" cy="16" r="6"/><line x1="16" y1="10" x2="16" y2="4"/><line x1="10.8" y1="19" x2="6.5" y2="25.4"/><line x1="21.2" y1="19" x2="25.5" y2="25.4"/>`,
+    g: `<path d="M22,8 A9,9 0 1,0 22,24 A6,6 0 1,1 22,8"/><circle cx="16" cy="5" r="1.8" fill="${color}" stroke="none"/>`,
+    h: `<circle cx="9" cy="16" r="5"/><circle cx="23" cy="16" r="5"/><line x1="14" y1="16" x2="18" y2="16"/>`,
+    i: `<polygon points="16,5 25,10.5 25,21.5 16,27 7,21.5 7,10.5"/>`,
+    j: `<path d="M16,8 C22,8 26,13 24,18 C22,23 16,24 16,24 C16,24 10,23 8,18 C6,13 10,8 16,8 Z"/><line x1="16" y1="24" x2="16" y2="29"/><line x1="12" y1="27" x2="20" y2="27"/>`,
+    k: `<path d="M5,16 Q10,8 16,8 Q22,8 27,16 Q22,24 16,24 Q10,24 5,16 Z"/><ellipse cx="16" cy="16" rx="2.5" ry="5" fill="${color}" fill-opacity="0.35"/><ellipse cx="16" cy="16" rx="2.5" ry="5"/>`,
+    l: `<polygon points="16,5 28,26 4,26"/><polygon points="16,22 7.5,10 24.5,10"/>`,
+    m: `<line x1="16" y1="5" x2="16" y2="27"/><line x1="5" y1="16" x2="27" y2="16"/><circle cx="16" cy="5" r="2" fill="${color}" stroke="none"/><circle cx="16" cy="27" r="2" fill="${color}" stroke="none"/><circle cx="5" cy="16" r="2" fill="${color}" stroke="none"/><circle cx="27" cy="16" r="2" fill="${color}" stroke="none"/>`,
+    n: `<path d="M5,19 Q8,10 12,19 Q16,28 20,19 Q24,10 27,19"/><circle cx="16" cy="9" r="3.5"/>`,
+    o: `<rect x="8" y="8" width="16" height="16"/><rect x="8" y="8" width="16" height="16" transform="rotate(45 16 16)"/>`,
+    p: `<circle cx="16" cy="16" r="11"/><circle cx="16" cy="16" r="6.5"/><circle cx="16" cy="16" r="2.5"/>`,
+    q: `<polyline points="20,4 11,17 17,17 12,28"/>`,
+    r: `<path d="M16,16 L16,6 L26,6 L26,26 L6,26 L6,10 L22,10"/><polyline points="18,8 22,10 18,12"/>`,
+    s: `<path d="M10,6 Q22,6 22,13 Q22,20 10,20 Q10,26 16,27"/><path d="M22,12 Q10,12 10,19 Q10,26 22,26 Q22,20 16,19"/>`,
+    t: `<polygon points="16,5 27,13 23,26 9,26 5,13"/><circle cx="16" cy="17" r="2.5" fill="${color}" stroke="none"/>`,
+    u: `<polygon points="16,4 28,16 16,28 4,16"/><line x1="6" y1="16" x2="26" y2="16"/>`,
+    v: `<line x1="9" y1="10" x2="23" y2="10"/><line x1="9" y1="16" x2="23" y2="16"/><line x1="9" y1="22" x2="23" y2="22"/><circle cx="6" cy="13" r="1.8" fill="${color}" stroke="none"/><circle cx="6" cy="19" r="1.8" fill="${color}" stroke="none"/>`,
+    w: `<line x1="16" y1="16" x2="16" y2="4"/><line x1="16" y1="16" x2="26.4" y2="22"/><line x1="16" y1="16" x2="26.4" y2="10"/><line x1="16" y1="16" x2="16" y2="28"/><line x1="16" y1="16" x2="5.6" y2="22"/><line x1="16" y1="16" x2="5.6" y2="10"/>`,
+    x: `<path d="M8,8 Q24,8 24,16 Q24,24 8,24"/><path d="M24,8 Q8,8 8,16 Q8,24 24,24"/><circle cx="10" cy="16" r="2" fill="${color}" stroke="none"/><circle cx="22" cy="16" r="2" fill="${color}" stroke="none"/>`,
+    y: `<polygon points="6,5 26,5 16,16"/><polygon points="6,27 26,27 16,16"/>`,
+    z: `<circle cx="16" cy="16" r="11"/><line x1="7.2" y1="7.2" x2="24.8" y2="24.8"/><line x1="24.8" y1="7.2" x2="7.2" y2="24.8"/><path d="M16,5 Q27,5 24.8,7.2 L16,16 Z" fill="${color}" fill-opacity="0.6" stroke="none"/>`,
+  };
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${paths[letter] || ''}</svg>`;
+}
+
+async function exportToCanvas(tokens) {
+  const GOLD = '#8a6010';
+  const GOLD2 = '#6a4800';
+  const BG = '#ffffff';
+  const BG2 = '#f5f0e8';
+  const BORDER = '#d0c0a0';
+  const TDIM = '#8a7a62';
+  const TEXT = '#1a1208';
+
+  const W = 1000;
+  const PAD = 48;
+  const SYM_SIZE = 40; // symbol cell width/height for message
+  const ABC_COLS = 13;
+  const ABC_CELL = Math.floor((W - PAD * 2) / ABC_COLS) + 8;
+  const ABC_SYM = 36; // symbol size inside alphabet cell
+  const ABC_LETTER_SIZE = 14; // letter label font size
+
+  // Pre-load all 26 alphabet images (small)
+  const abcImgs = {};
+  await Promise.all('abcdefghijklmnopqrstuvwxyz'.split('').map(async l => {
+    abcImgs[l] = await svgToImg(getSVGMarkup(l, '#8a6010').replace('width="32" height="32"', `width="${ABC_SYM}" height="${ABC_SYM}"`), ABC_SYM);
+  }));
+
+  // Pre-load symbol images for message (larger)
+  const msgImgs = {};
+  const usedLetters = new Set(tokens.flatMap(t => t.type === 'word' ? t.chars.filter(c => c.hasSymbol).map(c => c.lo) : []));
+  await Promise.all([...usedLetters].map(async l => {
+    msgImgs[l] = await svgToImg(getSVGMarkup(l, '#5a3800').replace('width="32" height="32"', `width="${SYM_SIZE}" height="${SYM_SIZE}"`), SYM_SIZE);
+  }));
+
+  // ── Layout pass: compute message rows ──
+  const SPACE_W = 18;
+  const CHAR_W = SYM_SIZE + 2;
+  const LINE_H = SYM_SIZE + 14;
+  const MAX_W = W - PAD * 2;
+
+  const lines = [[]]; // each line = array of items {type, letter|n, w}
+  let cx = 0;
+
+  for (const tok of tokens) {
+    if (tok.type === 'newline') {
+      lines.push([]);
+      cx = 0;
+      continue;
+    }
+    if (tok.type === 'space') {
+      const item = { type: 'space', w: SPACE_W };
+      lines[lines.length - 1].push(item);
+      cx += SPACE_W;
+      continue;
+    }
+    // word
+    const wordW = tok.chars.reduce((s, c) => s + (c.hasSymbol ? CHAR_W : 12), 0);
+    if (cx + wordW > MAX_W && cx > 0) {
+      lines.push([]);
+      cx = 0;
+    }
+    for (const c of tok.chars) {
+      const w = c.hasSymbol ? CHAR_W : 12;
+      lines[lines.length - 1].push({ type: c.hasSymbol ? 'sym' : 'plain', letter: c.lo, ch: c.ch, w });
+      cx += w;
+    }
+  }
+
+  const MSG_H = lines.length * LINE_H + 28;
+  const ABC_ROWS = 2;
+  const ABC_H = ABC_ROWS * (ABC_CELL + 14) + 16;
+
+  // Total canvas height
+  const TITLE_H = 100;
+  const SECTION_GAP = 28;
+  const LABEL_H = 30;
+  const TOTAL_H = PAD + TITLE_H + SECTION_GAP + MSG_H + SECTION_GAP + LABEL_H + (ABC_CELL * 2 + 14 + 14) + PAD;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = TOTAL_H;
+  const ctx = canvas.getContext('2d');
+
+  // Background
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, W, TOTAL_H);
+
+  let y = PAD;
+
+  // ── TITLE ──
+  ctx.fillStyle = '#a08040';
+  ctx.font = '11px serif';
+  ctx.textAlign = 'center';
+  ctx.letterSpacing = '6px';
+  ctx.fillText('∴  ARCANUM  ∴', W / 2, y + 18);
+
+  ctx.fillStyle = '#5a3800';
+  ctx.font = 'bold 28px serif';
+  ctx.letterSpacing = '4px';
+  ctx.fillText('MENSAJE CIFRADO', W / 2, y + 52);
+
+  // separator line
+  ctx.strokeStyle = '#d0c0a0';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(PAD, y + 68);
+  ctx.lineTo(W - PAD, y + 68);
+  ctx.stroke();
+  y += TITLE_H;
+
+  // ── MESSAGE PANEL ──
+  // Panel bg
+  ctx.fillStyle = BG2;
+  ctx.fillRect(PAD - 1, y, MAX_W + 2, MSG_H);
+  ctx.strokeStyle = '#d0c0a0';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(PAD - 1, y, MAX_W + 2, MSG_H);
+
+  ctx.letterSpacing = '0px';
+  let ly = y + 14;
+  for (const line of lines) {
+    let lx = PAD + 10;
+    for (const item of line) {
+      if (item.type === 'sym') {
+        ctx.drawImage(msgImgs[item.letter], lx, ly, SYM_SIZE, SYM_SIZE);
+        lx += CHAR_W;
+      } else if (item.type === 'plain') {
+        ctx.fillStyle = '#8a7a62';
+        ctx.font = '14px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(item.ch, lx, ly + SYM_SIZE * 0.7);
+        lx += item.w;
+      } else if (item.type === 'space') {
+        // draw underscore
+        ctx.fillStyle = '#8a7a62';
+        ctx.font = `bold ${SYM_SIZE * 0.5}px monospace`;
+        ctx.textAlign = 'left';
+        ctx.fillText('_', lx, ly + SYM_SIZE * 0.75);
+        lx += item.w;
+      }
+    }
+    ly += LINE_H;
+  }
+  y += MSG_H + SECTION_GAP;
+
+  // ── SEPARATOR ──
+  const gradSep = ctx.createLinearGradient(PAD, 0, W - PAD, 0);
+  gradSep.addColorStop(0, 'transparent');
+  gradSep.addColorStop(0.5, '#c0a060');
+  gradSep.addColorStop(1, 'transparent');
+  ctx.strokeStyle = gradSep;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(PAD, y);
+  ctx.lineTo(W - PAD, y);
+  ctx.stroke();
+  y += 10;
+
+  // ── ALPHABET LABEL ──
+  ctx.fillStyle = '#5a3800';
+  ctx.font = '11px serif';
+  ctx.textAlign = 'center';
+  ctx.letterSpacing = '5px';
+  ctx.fillText('ALFABETO DE REFERENCIA', W / 2, y + 16);
+  y += LABEL_H;
+
+  // ── ALPHABET GRID ── (13 × 2)
+  const LETTERS = 'abcdefghijklmnopqrstuvwxyz'.split('');
+  const cellW = Math.floor(MAX_W / ABC_COLS);
+  const cellH = ABC_CELL + 14;
+
+  for (let i = 0; i < LETTERS.length; i++) {
+    const col = i % ABC_COLS;
+    const row = Math.floor(i / ABC_COLS);
+    const cx2 = PAD + col * cellW;
+    const cy2 = y + row * cellH;
+
+    // cell bg + border
+    ctx.fillStyle = BG2;
+    ctx.fillRect(cx2, cy2, cellW, cellH);
+    ctx.strokeStyle = '#d0c0a0';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(cx2, cy2, cellW, cellH);
+
+    // symbol centered
+    const symX = cx2 + (cellW - ABC_SYM) / 2;
+    const symY = cy2 + 8;
+    ctx.drawImage(abcImgs[LETTERS[i]], symX, symY, ABC_SYM, ABC_SYM);
+
+    // letter label
+    ctx.fillStyle = '#8a7a62';
+    ctx.font = `bold ${ABC_LETTER_SIZE}px serif`;
+    ctx.textAlign = 'center';
+    ctx.letterSpacing = '1px';
+    ctx.fillText(LETTERS[i].toUpperCase(), cx2 + cellW / 2, cy2 + cellH - 5);
+  }
+
+  y += 2 * cellH + 10;
+
+  // ── FOOTER ──
+  ctx.fillStyle = '#a08040';
+  ctx.font = '8px serif';
+  ctx.textAlign = 'center';
+  ctx.letterSpacing = '3px';
+  ctx.fillText('∴  CODIFICADOR DE SÍMBOLOS  ∴', W / 2, y + 16);
+
+  // Download
+  const link = document.createElement('a');
+  link.download = 'mensaje-cifrado.jpg';
+  link.href = canvas.toDataURL('image/jpeg', 0.95);
+  link.click();
+}
+
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
