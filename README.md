@@ -1,1 +1,4 @@
-# Codificaci-n-Pagina-Web
+mi-pagina-web/
+├── index.html
+├── styles.css
+└── script.js
